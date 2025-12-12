@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-            background-color: #f8f9fa;
+            background-color: #f0f2f5;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -99,29 +99,38 @@
             transition: opacity 0.2s;
             margin-top: 1rem;
         }
-        .btn-save { background-color: #7f8c8d; color: white; }
         .btn-check { background-color: #e74c3c; color: white; }
         button:hover { opacity: 0.9; }
 
-        /* 파일 업로드 버튼 스타일 */
+        /* 파일 업로드 및 상태 표시 스타일 */
         .file-upload-wrapper {
-            margin-bottom: 1.5rem;
-            padding: 1rem;
+            margin-bottom: 2rem;
+            padding: 2rem 1.5rem;
             border: 2px dashed #bdc3c7;
             border-radius: 8px;
             text-align: center;
-            background-color: #fcfcfc;
+            background-color: #f9f9f9;
         }
-        .file-upload-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #7f8c8d;
-            font-size: 0.9rem;
-            cursor: pointer;
+        .status-box {
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+        }
+        .status-ok {
+            background-color: #d4efdf;
+            color: #1e8449;
+            border: 1px solid #a9dfbf;
+        }
+        .status-none {
+            background-color: #fadbd8;
+            color: #c0392b;
+            border: 1px solid #f1948a;
         }
         .download-link {
             display: inline-block;
-            margin-top: 0.5rem;
+            margin-top: 1rem;
             font-size: 0.8rem;
             color: #3498db;
             text-decoration: underline;
@@ -142,13 +151,6 @@
         .result-danger { background-color: #fadbd8; color: #c0392b; border: 2px solid #e74c3c; }
         .result-warning { background-color: #fdebd0; color: #d35400; border: 2px solid #e67e22; }
         .result-safe { background-color: #d4efdf; color: #1e8449; border: 1px solid #a9dfbf; }
-
-        .info-text {
-            font-size: 0.85rem;
-            color: #95a5a6;
-            margin-top: 0.5rem;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
@@ -169,8 +171,8 @@
             <select id="contractType">
                 <option value="revenue">단일판매ㆍ공급계약</option>
                 <option value="asset">유형자산 취득ㆍ처분</option>
-                <option value="borrowing">금전 차입ㆍ대여</option>
-                <option value="litigation">소송ㆍ경영분쟁</option>
+                <option value="borrowing">금전 차입ㆍ대여 발생</option>
+                <option value="litigation">소송ㆍ경영분쟁 발생</option>
             </select>
         </div>
 
@@ -186,28 +188,22 @@
 
     <div id="setting" class="tab-content">
         
+        <div id="statusDisplay" class="status-box status-none">
+            🔒 기초 정보가 설정되지 않았습니다.
+        </div>
+
         <div class="file-upload-wrapper">
-            <label class="file-upload-label" for="configInput">📂 <strong>설정 파일(.json)</strong> 업로드 시<br>자동 입력됩니다.</label>
+            <label style="display:block; margin-bottom:10px; color:#555;">
+                보안을 위해 <strong>숫자는 화면에 표시되지 않습니다.</strong><br>
+                관리자가 배포한 파일을 업로드해주세요.
+            </label>
             <input type="file" id="configInput" accept=".json" style="display:none" onchange="loadConfigFile()">
-            <button onclick="document.getElementById('configInput').click()" style="padding:0.5rem 1rem; border:1px solid #bdc3c7; background:white; border-radius:4px; cursor:pointer;">파일 선택</button>
+            <button onclick="document.getElementById('configInput').click()" style="padding:0.7rem 1.5rem; background:#3498db; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">📂 설정 파일 업로드</button>
+            <br><br>
+            <button onclick="clearData()" style="padding:0.5rem 1rem; background:#95a5a6; color:white; border:none; border-radius:4px; font-size:0.8rem; cursor:pointer;">🗑️ 정보 삭제 (초기화)</button>
             <br>
             <a class="download-link" onclick="downloadTemplate()">[관리자용] 설정 파일 양식 다운로드</a>
         </div>
-
-        <div class="form-group">
-            <label>📊 매출액 (최근 사업연도)</label>
-            <input type="text" id="baseRevenue" placeholder="매출액 입력" onkeyup="inputNumberFormat(this)">
-        </div>
-        <div class="form-group">
-            <label>🏢 자산총액 (최근 사업연도)</label>
-            <input type="text" id="baseAsset" placeholder="자산총액 입력" onkeyup="inputNumberFormat(this)">
-        </div>
-        <div class="form-group">
-            <label>💰 자본총계 (최근 사업연도)</label>
-            <input type="text" id="baseEquity" placeholder="자본총계(자기자본) 입력" onkeyup="inputNumberFormat(this)">
-        </div>
-        <button class="action-btn btn-save" onclick="saveData()">💾 정보 저장하기</button>
-        <p class="info-text">* 입력한 정보는 이 PC(브라우저)에만 저장됩니다.</p>
     </div>
 </div>
 
@@ -221,51 +217,71 @@
         event.currentTarget.classList.add('active');
     }
 
+    // 페이지 로드 시 상태 확인
     window.onload = function() {
+        updateStatusUI();
+    }
+
+    // 로컬 스토리지에 데이터가 있는지 확인하고 UI 업데이트
+    function updateStatusUI() {
         const savedRevenue = localStorage.getItem('wisenut_revenue');
         const savedAsset = localStorage.getItem('wisenut_asset');
         const savedEquity = localStorage.getItem('wisenut_equity');
-        
-        if(savedRevenue) document.getElementById('baseRevenue').value = savedRevenue;
-        if(savedAsset) document.getElementById('baseAsset').value = savedAsset;
-        if(savedEquity) document.getElementById('baseEquity').value = savedEquity;
+        const statusDiv = document.getElementById('statusDisplay');
+
+        if (savedRevenue && savedAsset && savedEquity) {
+            statusDiv.className = "status-box status-ok";
+            statusDiv.innerHTML = "✅ 기초 정보 설정 완료<br><span style='font-size:0.8rem; font-weight:normal;'>(데이터가 브라우저에 안전하게 저장되었습니다)</span>";
+        } else {
+            statusDiv.className = "status-box status-none";
+            statusDiv.innerHTML = "🔒 기초 정보가 없습니다.<br><span style='font-size:0.8rem; font-weight:normal;'>(파일을 업로드 해주세요)</span>";
+        }
     }
 
-    function saveData() {
-        const revenue = document.getElementById('baseRevenue').value;
-        const asset = document.getElementById('baseAsset').value;
-        const equity = document.getElementById('baseEquity').value;
-        
-        localStorage.setItem('wisenut_revenue', revenue);
-        localStorage.setItem('wisenut_asset', asset);
-        localStorage.setItem('wisenut_equity', equity);
-        
-        alert("✅ 기초 정보가 저장되었습니다.\n[계약 검토] 탭에서 바로 사용 가능합니다.");
-        document.getElementsByClassName('tab-btn')[0].click();
-    }
-
+    // 설정 파일 불러오기 및 자동 저장
     function loadConfigFile() {
         const fileInput = document.getElementById('configInput');
         const file = fileInput.files[0];
+        
         if (file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
                     if (data.revenue && data.asset && data.equity) {
-                        document.getElementById('baseRevenue').value = comma(uncomma(data.revenue));
-                        document.getElementById('baseAsset').value = comma(uncomma(data.asset));
-                        document.getElementById('baseEquity').value = comma(uncomma(data.equity));
-                        alert("✅ 파일 정보 로드 완료.\n[정보 저장하기]를 눌러 확정해주세요.");
+                        // 로컬 스토리지 자동 저장 (화면 표시 X)
+                        localStorage.setItem('wisenut_revenue', uncomma(data.revenue));
+                        localStorage.setItem('wisenut_asset', uncomma(data.asset));
+                        localStorage.setItem('wisenut_equity', uncomma(data.equity));
+
+                        alert("✅ 보안 설정이 완료되었습니다.\n숫자는 화면에 표시되지 않으며,\n[계약 검토] 탭에서 즉시 사용 가능합니다.");
+                        updateStatusUI();
+                        
+                        // 자동으로 검토 탭 이동
+                        document.getElementsByClassName('tab-btn')[0].click();
                     } else {
-                        alert("❌ 파일 형식이 올바르지 않습니다. (equity 포함 확인)");
+                        alert("❌ 파일 형식이 올바르지 않습니다. (필수 항목 누락)");
                     }
-                } catch (error) { alert("❌ 파일 읽기 오류"); }
+                } catch (error) {
+                    alert("❌ 파일 읽기 중 오류가 발생했습니다.");
+                }
             };
             reader.readAsText(file);
         }
     }
 
+    // 데이터 초기화
+    function clearData() {
+        if(confirm("저장된 기초 정보를 삭제하시겠습니까?")) {
+            localStorage.removeItem('wisenut_revenue');
+            localStorage.removeItem('wisenut_asset');
+            localStorage.removeItem('wisenut_equity');
+            updateStatusUI();
+            alert("삭제되었습니다.");
+        }
+    }
+
+    // 관리자용 양식 다운로드
     function downloadTemplate() {
         const template = {
             "revenue": "35000000000",
@@ -291,54 +307,53 @@
         
         if (!contractAmountStr) { alert("금액을 입력해주세요."); return; }
 
+        // 로컬 스토리지에서 값 가져오기
+        const savedRevenue = localStorage.getItem('wisenut_revenue');
+        const savedAsset = localStorage.getItem('wisenut_asset');
+        const savedEquity = localStorage.getItem('wisenut_equity');
+
+        // 데이터 존재 여부 확인
+        if (!savedRevenue || !savedAsset || !savedEquity) {
+            alert("⚠️ 기초 정보가 설정되지 않았습니다.\n[기초 정보 설정] 탭에서 파일을 업로드해주세요.");
+            document.getElementsByClassName('tab-btn')[1].click(); // 설정 탭으로 이동
+            return;
+        }
+
         const contractAmount = parseFloat(contractAmountStr);
         let baseAmount = 0;
         let baseName = "";
-        let mandatoryLimit = 10; // 기본 의무공시 기준 10%
+        let mandatoryLimit = 10; 
 
-        // 기준값 및 임계치 설정
         if (type === 'revenue') {
-            const val = uncomma(document.getElementById('baseRevenue').value);
-            if(!val) { alert("기초 정보(매출액)가 없습니다."); return; }
-            baseAmount = parseFloat(val);
+            baseAmount = parseFloat(savedRevenue);
             baseName = "매출액";
-            // 단일판매는 10% 의무, 5% 사업보고서
         } else if (type === 'asset') {
-            const val = uncomma(document.getElementById('baseAsset').value);
-            if(!val) { alert("기초 정보(자산총액)가 없습니다."); return; }
-            baseAmount = parseFloat(val);
+            baseAmount = parseFloat(savedAsset);
             baseName = "자산총액";
-            // 자산취득은 10% 의무만 체크 (요청사항 반영)
         } else if (type === 'borrowing') {
-            const val = uncomma(document.getElementById('baseEquity').value);
-            if(!val) { alert("기초 정보(자본총계)가 없습니다."); return; }
-            baseAmount = parseFloat(val);
+            baseAmount = parseFloat(savedEquity);
             baseName = "자본총계";
-            // 차입/대여는 10% 의무만 체크
         } else if (type === 'litigation') {
-            const val = uncomma(document.getElementById('baseEquity').value);
-            if(!val) { alert("기초 정보(자본총계)가 없습니다."); return; }
-            baseAmount = parseFloat(val);
+            baseAmount = parseFloat(savedEquity);
             baseName = "자본총계";
-            mandatoryLimit = 5; // 소송은 5%가 의무 공시 기준
+            mandatoryLimit = 5; 
         }
 
         const ratio = (contractAmount / baseAmount) * 100;
         const resultDiv = document.getElementById('result');
         resultDiv.style.display = 'block';
 
-        // 1. 의무 공시 대상 (각 항목별 기준치 이상)
+        // 1. 의무 공시 대상
         if (ratio >= mandatoryLimit) {
             resultDiv.className = 'result-danger';
             resultDiv.innerHTML = `
                 🚨 <strong>[의무 공시] 대상입니다.</strong><br><br>
-                입력 금액이 ${baseName} 대비 <strong>${ratio.toFixed(2)}%</strong>입니다.<br>
-                (기준: ${mandatoryLimit}% 이상)<br>
+                비율: <strong>${ratio.toFixed(2)}%</strong> (${mandatoryLimit}% 이상)<br>
                 <br>
                 <span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">즉시 공시IR팀으로 사전 통지바랍니다.</span>
             `;
         } 
-        // 2. 단일판매(매출) 특례: 5% ~ 10% 구간 (사업보고서 기재)
+        // 2. 단일판매(매출) 특례: 5% ~ 10%
         else if (type === 'revenue' && ratio >= 5) {
             resultDiv.className = 'result-warning';
             resultDiv.innerHTML = `
@@ -349,7 +364,7 @@
                 <span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">반드시 공시IR팀으로 사전 통지바랍니다.</span>
             `;
         } 
-        // 3. 그 외: 공시 의무 없음
+        // 3. 그 외
         else {
             resultDiv.className = 'result-safe';
             resultDiv.innerHTML = `
