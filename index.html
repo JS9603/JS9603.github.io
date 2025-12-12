@@ -103,6 +103,31 @@
         .btn-check { background-color: #e74c3c; color: white; }
         button:hover { opacity: 0.9; }
 
+        /* 파일 업로드 버튼 스타일 */
+        .file-upload-wrapper {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 2px dashed #bdc3c7;
+            border-radius: 8px;
+            text-align: center;
+            background-color: #fcfcfc;
+        }
+        .file-upload-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .download-link {
+            display: inline-block;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: #3498db;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
         #result {
             margin-top: 1.5rem;
             padding: 1.2rem;
@@ -114,21 +139,9 @@
         }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        .result-danger { 
-            background-color: #fadbd8; 
-            color: #c0392b; 
-            border: 2px solid #e74c3c; 
-        }
-        .result-warning { 
-            background-color: #fdebd0; 
-            color: #d35400; 
-            border: 2px solid #e67e22; 
-        }
-        .result-safe { 
-            background-color: #d4efdf; 
-            color: #1e8449; 
-            border: 1px solid #a9dfbf; 
-        }
+        .result-danger { background-color: #fadbd8; color: #c0392b; border: 2px solid #e74c3c; }
+        .result-warning { background-color: #fdebd0; color: #d35400; border: 2px solid #e67e22; }
+        .result-safe { background-color: #d4efdf; color: #1e8449; border: 1px solid #a9dfbf; }
 
         .info-text {
             font-size: 0.85rem;
@@ -155,12 +168,14 @@
             <label>📂 분석 항목 선택</label>
             <select id="contractType">
                 <option value="revenue">단일판매ㆍ공급계약</option>
-                <option value="asset">자산 취득ㆍ처분</option>
+                <option value="asset">유형자산 취득ㆍ처분</option>
+                <option value="borrowing">금전 차입ㆍ대여</option>
+                <option value="litigation">소송ㆍ경영분쟁</option>
             </select>
         </div>
 
         <div class="form-group">
-            <label>💸 금번 계약/취득 금액 (원)</label>
+            <label>💸 금번 건별 금액 (원)</label>
             <input type="text" id="contractAmount" placeholder="금액 입력 (VAT 제외)" onkeyup="inputNumberFormat(this)">
         </div>
 
@@ -170,13 +185,26 @@
     </div>
 
     <div id="setting" class="tab-content">
+        
+        <div class="file-upload-wrapper">
+            <label class="file-upload-label" for="configInput">📂 <strong>설정 파일(.json)</strong> 업로드 시<br>자동 입력됩니다.</label>
+            <input type="file" id="configInput" accept=".json" style="display:none" onchange="loadConfigFile()">
+            <button onclick="document.getElementById('configInput').click()" style="padding:0.5rem 1rem; border:1px solid #bdc3c7; background:white; border-radius:4px; cursor:pointer;">파일 선택</button>
+            <br>
+            <a class="download-link" onclick="downloadTemplate()">[관리자용] 설정 파일 양식 다운로드</a>
+        </div>
+
         <div class="form-group">
-            <label>📊 최근 사업연도 매출액 (원)</label>
+            <label>📊 매출액 (최근 사업연도)</label>
             <input type="text" id="baseRevenue" placeholder="매출액 입력" onkeyup="inputNumberFormat(this)">
         </div>
         <div class="form-group">
-            <label>💰 최근 사업연도 자산총액 (원)</label>
+            <label>🏢 자산총액 (최근 사업연도)</label>
             <input type="text" id="baseAsset" placeholder="자산총액 입력" onkeyup="inputNumberFormat(this)">
+        </div>
+        <div class="form-group">
+            <label>💰 자본총계 (최근 사업연도)</label>
+            <input type="text" id="baseEquity" placeholder="자본총계(자기자본) 입력" onkeyup="inputNumberFormat(this)">
         </div>
         <button class="action-btn btn-save" onclick="saveData()">💾 정보 저장하기</button>
         <p class="info-text">* 입력한 정보는 이 PC(브라우저)에만 저장됩니다.</p>
@@ -186,13 +214,9 @@
 <script>
     function openTab(tabName) {
         const contents = document.getElementsByClassName('tab-content');
-        for (let i = 0; i < contents.length; i++) {
-            contents[i].classList.remove('active');
-        }
+        for (let i = 0; i < contents.length; i++) { contents[i].classList.remove('active'); }
         const btns = document.getElementsByClassName('tab-btn');
-        for (let i = 0; i < btns.length; i++) {
-            btns[i].classList.remove('active');
-        }
+        for (let i = 0; i < btns.length; i++) { btns[i].classList.remove('active'); }
         document.getElementById(tabName).classList.add('active');
         event.currentTarget.classList.add('active');
     }
@@ -200,75 +224,121 @@
     window.onload = function() {
         const savedRevenue = localStorage.getItem('wisenut_revenue');
         const savedAsset = localStorage.getItem('wisenut_asset');
+        const savedEquity = localStorage.getItem('wisenut_equity');
         
         if(savedRevenue) document.getElementById('baseRevenue').value = savedRevenue;
         if(savedAsset) document.getElementById('baseAsset').value = savedAsset;
+        if(savedEquity) document.getElementById('baseEquity').value = savedEquity;
     }
 
     function saveData() {
         const revenue = document.getElementById('baseRevenue').value;
         const asset = document.getElementById('baseAsset').value;
+        const equity = document.getElementById('baseEquity').value;
         
         localStorage.setItem('wisenut_revenue', revenue);
         localStorage.setItem('wisenut_asset', asset);
+        localStorage.setItem('wisenut_equity', equity);
         
         alert("✅ 기초 정보가 저장되었습니다.\n[계약 검토] 탭에서 바로 사용 가능합니다.");
         document.getElementsByClassName('tab-btn')[0].click();
     }
 
-    function inputNumberFormat(obj) {
-        obj.value = comma(uncomma(obj.value));
+    function loadConfigFile() {
+        const fileInput = document.getElementById('configInput');
+        const file = fileInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.revenue && data.asset && data.equity) {
+                        document.getElementById('baseRevenue').value = comma(uncomma(data.revenue));
+                        document.getElementById('baseAsset').value = comma(uncomma(data.asset));
+                        document.getElementById('baseEquity').value = comma(uncomma(data.equity));
+                        alert("✅ 파일 정보 로드 완료.\n[정보 저장하기]를 눌러 확정해주세요.");
+                    } else {
+                        alert("❌ 파일 형식이 올바르지 않습니다. (equity 포함 확인)");
+                    }
+                } catch (error) { alert("❌ 파일 읽기 오류"); }
+            };
+            reader.readAsText(file);
+        }
     }
-    function comma(str) {
-        str = String(str);
-        return str.replace(/(\d)(?=(?:\d{3})+(?!\d))/g, '$1,');
+
+    function downloadTemplate() {
+        const template = {
+            "revenue": "35000000000",
+            "asset": "50000000000",
+            "equity": "30000000000"
+        };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(template, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "공시_기초정보_설정파일.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
     }
-    function uncomma(str) {
-        str = String(str);
-        return str.replace(/[^\d]+/g, '');
-    }
+
+    function inputNumberFormat(obj) { obj.value = comma(uncomma(obj.value)); }
+    function comma(str) { str = String(str); return str.replace(/(\d)(?=(?:\d{3})+(?!\d))/g, '$1,'); }
+    function uncomma(str) { str = String(str); return str.replace(/[^\d]+/g, ''); }
 
     function checkDisclosure() {
         const type = document.getElementById('contractType').value;
         const contractAmountStr = uncomma(document.getElementById('contractAmount').value);
         
-        if (!contractAmountStr) {
-            alert("금액을 입력해주세요.");
-            return;
-        }
+        if (!contractAmountStr) { alert("금액을 입력해주세요."); return; }
 
         const contractAmount = parseFloat(contractAmountStr);
         let baseAmount = 0;
         let baseName = "";
+        let mandatoryLimit = 10; // 기본 의무공시 기준 10%
 
+        // 기준값 및 임계치 설정
         if (type === 'revenue') {
-            const revStr = uncomma(document.getElementById('baseRevenue').value);
-            if(!revStr) { alert("기초 정보(매출액)가 없습니다.\n[기초 정보 설정] 탭에서 먼저 입력해주세요."); return; }
-            baseAmount = parseFloat(revStr);
+            const val = uncomma(document.getElementById('baseRevenue').value);
+            if(!val) { alert("기초 정보(매출액)가 없습니다."); return; }
+            baseAmount = parseFloat(val);
             baseName = "매출액";
-        } else {
-            const assetStr = uncomma(document.getElementById('baseAsset').value);
-            if(!assetStr) { alert("기초 정보(자산총액)가 없습니다.\n[기초 정보 설정] 탭에서 먼저 입력해주세요."); return; }
-            baseAmount = parseFloat(assetStr);
+            // 단일판매는 10% 의무, 5% 사업보고서
+        } else if (type === 'asset') {
+            const val = uncomma(document.getElementById('baseAsset').value);
+            if(!val) { alert("기초 정보(자산총액)가 없습니다."); return; }
+            baseAmount = parseFloat(val);
             baseName = "자산총액";
+            // 자산취득은 10% 의무만 체크 (요청사항 반영)
+        } else if (type === 'borrowing') {
+            const val = uncomma(document.getElementById('baseEquity').value);
+            if(!val) { alert("기초 정보(자본총계)가 없습니다."); return; }
+            baseAmount = parseFloat(val);
+            baseName = "자본총계";
+            // 차입/대여는 10% 의무만 체크
+        } else if (type === 'litigation') {
+            const val = uncomma(document.getElementById('baseEquity').value);
+            if(!val) { alert("기초 정보(자본총계)가 없습니다."); return; }
+            baseAmount = parseFloat(val);
+            baseName = "자본총계";
+            mandatoryLimit = 5; // 소송은 5%가 의무 공시 기준
         }
 
         const ratio = (contractAmount / baseAmount) * 100;
-        
         const resultDiv = document.getElementById('result');
         resultDiv.style.display = 'block';
 
-        // 1. 공통 로직: 10% 이상이면 무조건 즉시 공시 대상 (자산/매출 불문)
-        if (ratio >= 10) {
+        // 1. 의무 공시 대상 (각 항목별 기준치 이상)
+        if (ratio >= mandatoryLimit) {
             resultDiv.className = 'result-danger';
             resultDiv.innerHTML = `
-                🚨 <strong>[즉시 공시] 대상입니다.</strong><br><br>
-                비율: <strong>${ratio.toFixed(2)}%</strong> (10% 이상)<br>
+                🚨 <strong>[의무 공시] 대상입니다.</strong><br><br>
+                입력 금액이 ${baseName} 대비 <strong>${ratio.toFixed(2)}%</strong>입니다.<br>
+                (기준: ${mandatoryLimit}% 이상)<br>
                 <br>
                 <span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">즉시 공시IR팀으로 사전 통지바랍니다.</span>
             `;
         } 
-        // 2. 매출(단일판매)인 경우: 5% 이상이면 사업보고서 기재 (주의)
+        // 2. 단일판매(매출) 특례: 5% ~ 10% 구간 (사업보고서 기재)
         else if (type === 'revenue' && ratio >= 5) {
             resultDiv.className = 'result-warning';
             resultDiv.innerHTML = `
@@ -279,13 +349,12 @@
                 <span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">반드시 공시IR팀으로 사전 통지바랍니다.</span>
             `;
         } 
-        // 3. 그 외 (자산 10% 미만 OR 매출 5% 미만): 공시 의무 없음
+        // 3. 그 외: 공시 의무 없음
         else {
-            let limitText = (type === 'asset') ? "10% 미만" : "5% 미만";
             resultDiv.className = 'result-safe';
             resultDiv.innerHTML = `
                 ✅ <strong>공시 의무 없음</strong><br><br>
-                비율: <strong>${ratio.toFixed(2)}%</strong> (${limitText})<br>
+                비율: <strong>${ratio.toFixed(2)}%</strong> (기준 미만)<br>
             `;
         }
     }
