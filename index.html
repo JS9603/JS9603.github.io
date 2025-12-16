@@ -33,15 +33,13 @@
         }
         .header h2 { margin: 0; font-size: 1.4rem; font-weight: 600; }
         
-        /* 라벨과 아이콘을 가로로 배치 */
         .label-header {
             display: flex;
-            align-items: center; /* 수직 중앙 정렬 */
-            justify-content: flex-start; /* 왼쪽 정렬 */
+            align-items: center;
+            justify-content: flex-start;
             margin-bottom: 0.5rem;
         }
         
-        /* 심플한 물음표 아이콘 버튼 스타일 */
         .help-icon-btn {
             background-color: #ecf0f1;
             color: #7f8c8d;
@@ -55,7 +53,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            margin-left: 8px; /* 글자와의 간격 */
+            margin-left: 8px;
             transition: all 0.2s;
         }
         .help-icon-btn:hover {
@@ -169,6 +167,17 @@
         .result-danger { background-color: #fadbd8; color: #c0392b; border: 2px solid #e74c3c; }
         .result-warning { background-color: #fdebd0; color: #d35400; border: 2px solid #e67e22; }
         .result-safe { background-color: #d4efdf; color: #1e8449; border: 1px solid #a9dfbf; }
+        
+        .expiry-info {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 5px;
+            font-weight: normal;
+        }
+        .expiry-warning {
+            color: #c0392b;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -201,7 +210,7 @@
                 <option value="revenue">단일판매ㆍ공급계약</option>
                 <option value="asset">유형자산 취득ㆍ처분</option>
                 <option value="borrowing">금전 차입ㆍ대여</option>
-                <option value="litigation">소송ㆍ경영분쟁</option>
+                <option value="litigation">소송ㆍ경영권 분쟁</option>
             </select>
         </div>
 
@@ -273,7 +282,6 @@
     function openModal() {
         const type = document.getElementById('contractType').value;
         const data = guideData[type];
-
         if (data) {
             document.getElementById('dynamicTitle').innerText = data.title;
             document.getElementById('dynamicDesc').innerHTML = data.content;
@@ -295,24 +303,56 @@
         if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
     });
 
+    // 🕒 날짜 비교 함수
+    function isExpired(dateString) {
+        if (!dateString) return false; // 날짜 없으면 만료 안된 것으로 처리 (하위호환)
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const target = new Date(dateString);
+        return today > target; // 오늘이 만료일보다 크면(지났으면) true
+    }
+
     function handleFiles(files) {
         const file = files[0];
         if (!file.name.endsWith('.json')) { alert("❌ .json 파일만 업로드할 수 있습니다."); return; }
+        
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
                 const data = JSON.parse(e.target.result);
-                if (data.revenue && data.asset && data.equity) {
-                    document.getElementById('baseRevenue').value = comma(uncomma(data.revenue));
-                    document.getElementById('baseAsset').value = comma(uncomma(data.asset));
-                    document.getElementById('baseEquity').value = comma(uncomma(data.equity));
-                    localStorage.setItem('wisenut_revenue', uncomma(data.revenue));
-                    localStorage.setItem('wisenut_asset', uncomma(data.asset));
-                    localStorage.setItem('wisenut_equity', uncomma(data.equity));
-                    alert("✅ 설정이 완료되었습니다.\n[계약 검토] 탭에서 바로 사용 가능합니다.");
-                    updateStatusUI();
-                    document.getElementsByClassName('tab-btn')[0].click();
-                } else { alert("❌ 파일 형식이 올바르지 않습니다."); }
+                
+                // 1. 필수 값 체크
+                if (!data.revenue || !data.asset || !data.equity) {
+                    alert("❌ 파일 형식이 올바르지 않습니다. (필수 항목 누락)");
+                    return;
+                }
+
+                // 2. 유효기간(만료) 체크
+                if (data.expirationDate && isExpired(data.expirationDate)) {
+                    alert("⛔ 기초정보가 만료되었습니다.\n\n갱신하여 주십시오.\n(설정된 만료일: " + data.expirationDate + ")");
+                    return; // 저장하지 않고 종료
+                }
+
+                // 3. 저장 진행
+                document.getElementById('baseRevenue').value = comma(uncomma(data.revenue));
+                document.getElementById('baseAsset').value = comma(uncomma(data.asset));
+                document.getElementById('baseEquity').value = comma(uncomma(data.equity));
+                
+                localStorage.setItem('wisenut_revenue', uncomma(data.revenue));
+                localStorage.setItem('wisenut_asset', uncomma(data.asset));
+                localStorage.setItem('wisenut_equity', uncomma(data.equity));
+                
+                // 만료일도 저장 (없으면 빈값)
+                if(data.expirationDate) {
+                    localStorage.setItem('wisenut_expiry', data.expirationDate);
+                } else {
+                    localStorage.removeItem('wisenut_expiry');
+                }
+
+                alert("✅ 설정이 완료되었습니다.\n[계약 검토] 탭에서 바로 사용 가능합니다.");
+                updateStatusUI();
+                document.getElementsByClassName('tab-btn')[0].click();
+
             } catch (error) { alert("❌ 파일 읽기 오류"); }
         };
         reader.readAsText(file);
@@ -328,9 +368,21 @@
     }
 
     window.onload = function() {
+        // 접속 시 만료 여부 자동 검사
+        const savedExpiry = localStorage.getItem('wisenut_expiry');
+        if (savedExpiry && isExpired(savedExpiry)) {
+            // 만료되었으면 데이터 삭제
+            localStorage.removeItem('wisenut_revenue');
+            localStorage.removeItem('wisenut_asset');
+            localStorage.removeItem('wisenut_equity');
+            localStorage.removeItem('wisenut_expiry');
+            alert("⚠️ 저장된 기초정보가 만료일(" + savedExpiry + ")을 경과하여\n자동으로 초기화되었습니다.\n\n새로운 파일을 업로드해주세요.");
+        }
+
         const savedRevenue = localStorage.getItem('wisenut_revenue');
         const savedAsset = localStorage.getItem('wisenut_asset');
         const savedEquity = localStorage.getItem('wisenut_equity');
+        
         if(savedRevenue) document.getElementById('baseRevenue').value = comma(uncomma(savedRevenue));
         if(savedAsset) document.getElementById('baseAsset').value = comma(uncomma(savedAsset));
         if(savedEquity) document.getElementById('baseEquity').value = comma(uncomma(savedEquity));
@@ -339,10 +391,16 @@
 
     function updateStatusUI() {
         const savedRevenue = localStorage.getItem('wisenut_revenue');
+        const savedExpiry = localStorage.getItem('wisenut_expiry');
         const statusDiv = document.getElementById('statusDisplay');
+        
         if (savedRevenue) {
+            let expiryText = "";
+            if (savedExpiry) {
+                expiryText = `<br><span class="expiry-info">유효기간: ${savedExpiry} 까지</span>`;
+            }
             statusDiv.className = "status-box status-ok";
-            statusDiv.innerHTML = "✅ 기초 정보 설정 완료<br><span style='font-size:0.8rem; font-weight:normal;'>(데이터가 브라우저에 안전하게 저장되었습니다)</span>";
+            statusDiv.innerHTML = `✅ 기초 정보 설정 완료<br><span style='font-size:0.8rem; font-weight:normal;'>(데이터가 브라우저에 안전하게 저장되었습니다)</span>${expiryText}`;
         } else {
             statusDiv.className = "status-box status-none";
             statusDiv.innerHTML = "🔒 기초 정보가 없습니다.<br><span style='font-size:0.8rem; font-weight:normal;'>(파일을 드래그하거나 선택해주세요)</span>";
@@ -351,14 +409,20 @@
 
     function clearData() {
         if(confirm("저장된 기초 정보를 삭제하시겠습니까?")) {
-            localStorage.removeItem('wisenut_revenue'); localStorage.removeItem('wisenut_asset'); localStorage.removeItem('wisenut_equity');
+            localStorage.removeItem('wisenut_revenue'); localStorage.removeItem('wisenut_asset'); localStorage.removeItem('wisenut_equity'); localStorage.removeItem('wisenut_expiry');
             document.getElementById('baseRevenue').value = ""; document.getElementById('baseAsset').value = ""; document.getElementById('baseEquity').value = "";
             updateStatusUI(); alert("삭제되었습니다.");
         }
     }
 
+    // 📌 템플릿 다운로드 시 expirationDate 필드 추가
     function downloadTemplate() {
-        const template = { "revenue": "원단위까지 입력, 숫자 이외는 지워주세요", "asset": "원단위까지 입력, 숫자 이외는 지워주세요", "equity": "원단위까지 입력, 숫자 이외는 지워주세요" };
+        const template = { 
+            "revenue": "원단위까지 입력, 숫자 이외는 지워주세요", 
+            "asset": "원단위까지 입력, 숫자 이외는 지워주세요", 
+            "equity": "원단위까지 입력, 숫자 이외는 지워주세요",
+            "expirationDate": "YYYY-MM-DD" // 만료일 예시
+        };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(template, null, 2));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href", dataStr);
@@ -373,6 +437,14 @@
     function uncomma(str) { str = String(str); return str.replace(/[^\d]+/g, ''); }
 
     function checkDisclosure() {
+        // 검토 시에도 만료 재확인
+        const savedExpiry = localStorage.getItem('wisenut_expiry');
+        if (savedExpiry && isExpired(savedExpiry)) {
+            alert("⛔ 기초정보가 만료되었습니다. 갱신하여 주십시오.");
+            location.reload(); // 새로고침해서 초기화 로직 수행
+            return;
+        }
+
         const type = document.getElementById('contractType').value;
         const contractAmountStr = uncomma(document.getElementById('contractAmount').value);
         if (!contractAmountStr) { alert("금액을 입력해주세요."); return; }
