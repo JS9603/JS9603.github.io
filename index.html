@@ -481,7 +481,7 @@
             resultDiv.innerHTML = `🚨 <strong>[의무 공시] 대상입니다.</strong><br><br>비율: <strong>${ratio.toFixed(2)}%</strong> (${mandatoryLimit}% 이상)<br><br><span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">즉시 공시IR팀으로 사전 통지바랍니다.</span>`;
         } else if (type === 'revenue' && ratio >= 5) {
             resultDiv.className = 'result-warning';
-            resultDiv.innerHTML = `📢 <strong>[사업보고서 기재] 대상입니다.</strong><br><br>비율: <strong>${ratio.toFixed(2)}%</strong> (5% 이상)<br><span style="font-size:0.9rem;">주요 경영사항에 해당하므로</span><br><br><span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">반드시 공시IR팀으로 사전 통지바랍니다.</span>`;
+            resultDiv.innerHTML = `📢 <strong>[사업보고서 기재] 대상입니다.</strong><br><br>비율: <strong>${ratio.toFixed(2)}%</strong> (5% 이상)<br><span style="font-size:0.9rem;">보고서 의무기재 사항에 해당하므로</span><br><br><span style="font-weight:bold; text-decoration:underline; font-size:1.1em;">반드시 공시IR팀으로 사전 통지바랍니다.</span>`;
         } else {
             resultDiv.className = 'result-safe';
             resultDiv.innerHTML = `✅ <strong>공시 의무 없음</strong><br><br>비율: <strong>${ratio.toFixed(2)}%</strong> (기준 미만)<br>`;
